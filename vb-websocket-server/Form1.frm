@@ -235,20 +235,20 @@ Dim eMask(3) As Byte
 End Function
 
 Public Function BinaryToDecimal(ByVal sBin As String, Optional ByVal BaseB As Currency = 2) As Currency
-Dim A As Currency, c As Currency, D As Currency, E As Currency, f As Currency
+Dim A As Currency, c As Currency, D As Currency, E As Currency, F As Currency
     If sBin = "" Then
         Exit Function
     End If
 Do
     A = Val(Right$(sBin, 1)) 'this is where the conversion happens
     sBin = Left$(sBin, Len(sBin) - 1) 'this is where the conversion happens
-    If f > 49 Then 'overflow
+    If F > 49 Then 'overflow
         Exit Do
     End If
-    c = BaseB ^ f 'conversion
+    c = BaseB ^ F 'conversion
     D = A * c 'conversion
     E = E + D 'conversion
-    f = f + 1 'counter
+    F = F + 1 'counter
 Loop Until sBin = ""
 BinaryToDecimal = E
 End Function
@@ -474,18 +474,18 @@ End Sub
 
 Private Sub Command4_Click()
     Text1 = ""
-Dim Str As String, f As Integer
-    f = FreeFile
+Dim Str As String, F As Integer
+    F = FreeFile
             Str = ""
-        Open App.Path & "\rootCA.crt" For Input As f
-            Str = Input(LOF(f), f)
-        Close f
-        Open App.Path & "\rootCA.key" For Input As f
-            Str = Str & vbLf & Input(LOF(f), f)
-        Close f
-        Open App.Path & "\rootCA.pem" For Output As f
-            Print #f, Str
-        Close f
+        Open App.Path & "\rootCA.crt" For Input As F
+            Str = Input(LOF(F), F)
+        Close F
+        Open App.Path & "\rootCA.key" For Input As F
+            Str = Str & vbLf & Input(LOF(F), F)
+        Close F
+        Open App.Path & "\rootCA.pem" For Output As F
+            Print #F, Str
+        Close F
     
     ctxServer(0).Close_
     
@@ -493,15 +493,15 @@ Dim Str As String, f As Integer
  
             
             Str = ""
-        Open App.Path & "\server.crt" For Input As f
-            Str = Input(LOF(f), f)
-        Close f
-        Open App.Path & "\server.key" For Input As f
-            Str = Str & vbLf & Input(LOF(f), f)
-        Close f
-        Open App.Path & "\server.pem" For Output As f
-            Print #f, Str
-        Close f
+        Open App.Path & "\server.crt" For Input As F
+            Str = Input(LOF(F), F)
+        Close F
+        Open App.Path & "\server.key" For Input As F
+            Str = Str & vbLf & Input(LOF(F), F)
+        Close F
+        Open App.Path & "\server.pem" For Output As F
+            Print #F, Str
+        Close F
     
     ctxServer(0).Protocol = sckTLSProtocol
 '    ctxServer(0).Bind 8088, "127.0.0.1"
@@ -529,7 +529,9 @@ Private Sub ctxServer_DataArrival(Index As Integer, ByVal bytesTotal As Long)
     Dim sBody               As String
     
 '    Debug.Print "ctxServer_DataArrival, bytesTotal=" & bytesTotal, Timer
+If bytesTotal <> -1 Then
     ctxServer(Index).GetData sRequest
+End If
     Dim secKey As String, i As Long, b() As Byte, AcceptKey As String, Origin As String, Host As String
 '    If Asc(sRequest) = &H81 Or websocket_data_available Then  '129 websocket send data
 '                    b = StrConv(sRequest, vbFromUnicode)
@@ -582,11 +584,11 @@ Private Sub ctxServer_DataArrival(Index As Integer, ByVal bytesTotal As Long)
                 "<p>" & Index & ": RemoteHostIP is " & ctxServer(Index).RemoteHostIP & "</p>" & vbCrLf & _
                 "<p>" & Index & ": RemotePort is " & ctxServer(Index).RemotePort & "</p>" & vbCrLf & _
                 "</body></html>" & vbCrLf
-                Dim f As Integer
-                    f = FreeFile
-                Open App.Path & "\wsTest.html" For Input As f
-                    sBody = Input(LOF(f), f)
-                Close f
+                Dim F As Integer
+                    F = FreeFile
+                Open App.Path & "\wsTest.html" For Input As F
+                    sBody = Input(LOF(F), F)
+                Close F
                 
             ctxServer(Index).SendData "HTTP/1.1 200 OK" & vbCrLf & _
                 "Content-Type: text/html" & vbCrLf & _
@@ -635,7 +637,7 @@ Private Sub ctxServer_DataArrival(Index As Integer, ByVal bytesTotal As Long)
                         wsd.RawData = wsd.RawData & sRequest
                         wsd.SocketIndex = Index
                         q_ws.Add SerializeToBytes(wsd), "W" & Index
-                        ctxServer_DataArrival Index, 0
+                        ctxServer_DataArrival Index, -1
                         Exit Sub
                     End If
             End Select
