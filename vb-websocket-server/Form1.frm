@@ -79,12 +79,13 @@ Private iPipeFile As Long
 
 Private Type ws_Data
     SocketIndex As Long
-    RemotePort As Long
     RawData As String
     ContentLength As Long
     sData As String
 End Type
-Private q_ws As New Collection
+'Private q_ws As New Collection
+Private a_q_ws() As ws_Data
+Private Count_a_q_ws As Long
 
 
 Private m_oRootCa               As cTlsSocket
@@ -237,7 +238,7 @@ Dim eMask(3) As Byte
 End Function
 
 Public Function BinaryToDecimal(ByVal sBin As String, Optional ByVal BaseB As Currency = 2) As Currency
-Dim A As Currency, c As Currency, D As Currency, E As Currency, F As Currency
+Dim A As Currency, C As Currency, D As Currency, E As Currency, F As Currency
     If sBin = "" Then
         Exit Function
     End If
@@ -247,8 +248,8 @@ Do
     If F > 49 Then 'overflow
         Exit Do
     End If
-    c = BaseB ^ F 'conversion
-    D = A * c 'conversion
+    C = BaseB ^ F 'conversion
+    D = A * C 'conversion
     E = E + D 'conversion
     F = F + 1 'counter
 Loop Until sBin = ""
@@ -531,23 +532,10 @@ Private Sub ctxServer_DataArrival(Index As Integer, ByVal bytesTotal As Long)
     Dim sBody               As String
     
 '    Debug.Print "ctxServer_DataArrival, bytesTotal=" & bytesTotal, Timer
-If bytesTotal <> -1 Then
+If bytesTotal > -1 Then
     ctxServer(Index).GetData sRequest
 End If
     Dim secKey As String, i As Long, b() As Byte, AcceptKey As String, Origin As String, Host As String
-'    If Asc(sRequest) = &H81 Or websocket_data_available Then  '129 websocket send data
-'                    b = StrConv(sRequest, vbFromUnicode)
-'            If websocket_data_available And Asc(sRequest) <> &H81 Then
-'                sBody = decodeMasked(b, 0)
-'                Text1 = sBody
-'            Else
-'                websocket_data_available = False
-'                sBody = hybi10Decode(b, ctxServer(Index))
-'                Text1 = Text1 & vbCrLf & sBody
-'            End If
-'        Exit Sub
-'    End If
-'    If UBound(vSplit) >= 0 Then
     If sRequest Like "GET*HTTP/1.?*" Then
         vSplit = Split(sRequest, vbCrLf)
         If InStr(vSplit(0), "/SubscribeToChatMsg") > 0 Then
@@ -598,22 +586,25 @@ End If
                 sBody
         End If
     Else 'Handle websocket packets
-        Dim c As Long, wsd As ws_Data, wi As Long
+        Dim C As Long, wsd As ws_Data, wi As Long
             wi = -1
-        For c = 1 To q_ws.Count
-                wsd.RemotePort = 0
-                wsd.ContentLength = 0
-                wsd.RawData = ""
-                wsd.sData = ""
-            DeserializeFromBytes q_ws.Item(c), wsd
-'            If wsd.RemotePort = ctxServer(Index).RemotePort Then 'Causes Stack Overflow
-            If wsd.SocketIndex = Index Then
-                wi = c
-                Exit For
-            End If
-        Next
+'        For C = 1 To q_ws.Count
+'                wsd.RemotePort = 0
+'                wsd.ContentLength = 0
+'                wsd.RawData = ""
+'                wsd.sData = ""
+'            DeserializeFromBytes q_ws.Item(C), wsd
+''            If wsd.RemotePort = ctxServer(Index).RemotePort Then 'Causes Stack Overflow
+'            If wsd.SocketIndex = Index Then
+'                wi = C
+'                Exit For
+'            End If
+'        Next
+            wi = Find_ws_Data_By_Index(Index)
         If wi <> -1 Then
-             q_ws.Remove wi
+'           q_ws.Remove wi
+            wsd = a_q_ws(wi)
+            Remove_ws_Data wi
         End If
 '            wsd.RemotePort = ctxServer(Index).RemotePort'Causes Stack Overflow
             wsd.SocketIndex = Index
@@ -622,7 +613,7 @@ End If
         Dim firstByteBinary As Byte, secondByteBinary As Byte, opcode As Long
         Dim payloadOffset As Long, payloadLength As Long
         Dim ubData As Long, dataLengthInt As Integer, dataLengthCur As Currency, sBin As String
-        Dim DataLength As Long, isMasked As Boolean, mask() As Byte, hasContinue As Boolean
+        Dim DataLength As Long, isMasked As Boolean, mask() As Byte, hasContinuation As Boolean
         
         Dim bSuccess As Boolean, NextFrame As String
             If wsd.RawData <> "" Then
@@ -631,16 +622,16 @@ End If
             End If
             data = StrConv(sRequest, vbFromUnicode)
                 ubData = UBound(data)
-                    hasContinue = False
+                    hasContinuation = False
             If ubData > -1 Then
                 firstByteBinary = data(0)
                     If firstByteBinary = 1 Then
                         firstByteBinary = 129
                         'Has Continuation frames
-                        hasContinue = True
+                        hasContinuation = True
                     ElseIf firstByteBinary = 128 Then
                         'Is Continuation
-                        firstByteBinary = 128
+                        hasContinuation = True
                     End If
                 secondByteBinary = data(1)
                 opcode = firstByteBinary And Not 128
@@ -656,13 +647,23 @@ End If
                 Case 1 ' text frame:
                 Case 2 'binary
                 Case 8 'connection close frame
+                    'When a browser closes the Tab or Reload the Tab
+                    Exit Sub
                 Case 9 'ping frame
                 Case 10 'pong frame
                 Case Else
+                        If bytesTotal < -4 Then 'Escape possible 'Out of Stack space' Error
+                            'Send close frame
+                            ctxServer(Index).SendData hybi10Encode(StrConv("", vbFromUnicode), "close", False)   'A server must not mask any frames that it sends to the client.
+                            
+                            Exit Sub
+                        End If
                     If ubData > -1 Then
                         wsd.RawData = wsd.RawData & sRequest
-                        q_ws.Add SerializeToBytes(wsd), "W" & Index
-                        ctxServer_DataArrival Index, -1
+'                        q_ws.Add SerializeToBytes(wsd), "W" & Index
+                        Add_ws_Data wsd
+                            
+                        ctxServer_DataArrival Index, IIf(bytesTotal > 0, -1, bytesTotal - 1)
                         Exit Sub
                     End If
             End Select
@@ -691,7 +692,8 @@ End If
             End If
             If Len(sRequest) < DataLength Then
                 wsd.RawData = sRequest
-                q_ws.Add SerializeToBytes(wsd), "W" & Index
+'                q_ws.Add SerializeToBytes(wsd), "W" & Index
+                Add_ws_Data wsd
                 Exit Sub
             Else
                 sBin = deCodeFrame(data, bSuccess, NextFrame)
@@ -700,18 +702,57 @@ End If
                 Else
                     wsd.sData = wsd.sData & sBin
                     wsd.ContentLength = wsd.ContentLength + (DataLength - payloadOffset)
+                        If opcode = 0 And hasContinuation = True Then
+                            hasContinuation = False
+                        Else
+                            If opcode = 0 Then
+                                hasContinuation = True
+                            End If
+                        End If
                 End If
             End If
-        If hasContinue = False And wsd.ContentLength = Len(wsd.sData) Then
+        If hasContinuation = False And wsd.ContentLength = Len(wsd.sData) Then 'And Right$(wsd.sData, 1) = "}" Then
             web_socket_DataArrival wsd.sData, ctxServer(Index)
         Else
-            q_ws.Add SerializeToBytes(wsd), "W" & Index
+'            q_ws.Add SerializeToBytes(wsd), "W" & Index
+            Add_ws_Data wsd
             Exit Sub
         End If
-        
     End If
 '    Debug.Print "ctxServer_DataArrival, done", Timer
 End Sub
+Private Function Find_ws_Data_By_Index(ByVal Index As Long) As Long
+Dim i As Long, C As Long
+    i = -1
+For C = Count_a_q_ws - 1 To 0 Step -1
+    If a_q_ws(C).SocketIndex = Index Then
+        i = C
+        Exit For
+    End If
+Next
+    Find_ws_Data_By_Index = i
+End Function
+Private Function Remove_ws_Data(ByVal aIndex As Long) As Long
+Dim C As Long, tmp() As ws_Data
+    If Count_a_q_ws = 0 Then Exit Function
+ReDim tmp(Count_a_q_ws - 1)
+For C = 0 To aIndex - 1
+    tmp(C) = a_q_ws(C)
+Next
+For C = aIndex + 1 To Count_a_q_ws - 1
+    tmp(C - 1) = a_q_ws(C)
+Next
+    a_q_ws = tmp
+        Erase tmp
+Count_a_q_ws = Count_a_q_ws - 1
+    Remove_ws_Data = Count_a_q_ws
+End Function
+Private Function Add_ws_Data(wsd As ws_Data) As Long
+ReDim Preserve a_q_ws(Count_a_q_ws)
+    a_q_ws(Count_a_q_ws) = wsd
+Add_ws_Data = Count_a_q_ws
+    Count_a_q_ws = Count_a_q_ws + 1
+End Function
 Sub web_socket_DataArrival(ByVal sData As String, ByVal cx As ctxWinsock)
   Dim b() As Byte, i As Long, webSocketIndex As Long
     If Len(sData) > 60 Then
@@ -846,16 +887,16 @@ Private Sub DeserializeFromBytes(b() As Byte, udt As ws_Data)
     Get iPipeFile, 1, udt
 End Sub
 Private Sub ctxServer_CloseEvent(Index As Integer)
-Dim i As Long, c As Long, temp() As Long
+Dim i As Long, C As Long, temp() As Long
 For i = 0 To websocket_count - 1
     If webSocket_clients(i) <> Index Then
-        ReDim Preserve temp(c)
-        temp(c) = webSocket_clients(i)
-        c = c + 1
+        ReDim Preserve temp(C)
+        temp(C) = webSocket_clients(i)
+        C = C + 1
     End If
 Next
 webSocket_clients = temp
-websocket_count = c
+websocket_count = C
 
     Unload ctxServer(Index)
 End Sub
