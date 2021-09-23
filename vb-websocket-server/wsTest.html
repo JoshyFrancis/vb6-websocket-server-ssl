@@ -2,7 +2,15 @@
 <html>
 <head>
 <script>
-function LogText(id, txt){ var l=document.getElementById(id); l.value += txt + '\n'; l.scrollTop += 100; }
+function LogText(id, txt){ 
+	var l=document.getElementById(id); l.value += 'Message Length :' + txt.length + '\n'; l.scrollTop += 100; 
+
+	if (txt.length>30){
+		txt=txt.substr(0,15)+'...' + txt.substr(txt.length-15);
+	}
+	var l=document.getElementById(id); l.value += txt + '\n'; l.scrollTop += 100; 
+
+}
 function SetText(id, txt){ var t=document.getElementById(id); t.value = txt; }
 
 var wsTimerMsg = null;

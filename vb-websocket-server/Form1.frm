@@ -9,19 +9,28 @@ Begin VB.Form Form1
    ScaleHeight     =   2952
    ScaleWidth      =   10116
    StartUpPosition =   3  'Windows Default
-   Begin VB.CommandButton cmdCloseWebSockets 
-      Caption         =   "Close Web Sockets"
-      Height          =   492
-      Left            =   5400
-      TabIndex        =   4
-      Top             =   840
-      Width           =   2292
-   End
    Begin VB.CommandButton cmdSendTextMessage 
       Caption         =   "Send Text Message"
       Enabled         =   0   'False
       Height          =   492
-      Left            =   3480
+      Left            =   3600
+      TabIndex        =   5
+      Top             =   840
+      Width           =   1812
+   End
+   Begin VB.CommandButton cmdCloseWebSockets 
+      Caption         =   "Close Web Sockets"
+      Height          =   492
+      Left            =   7440
+      TabIndex        =   4
+      Top             =   840
+      Width           =   2292
+   End
+   Begin VB.CommandButton cmdSendLengthTextMessage 
+      Caption         =   "Send Lengthy Text Message"
+      Enabled         =   0   'False
+      Height          =   492
+      Left            =   5520
       TabIndex        =   3
       Top             =   840
       Width           =   1812
@@ -67,23 +76,12 @@ Attribute VB_Exposed = False
 Option Explicit
 Private Declare Sub CopyMemory Lib "kernel32.dll" Alias "RtlMoveMemory" (ByRef Destination As Any, ByRef Source As Any, ByVal Length As Long)
 
-Private Declare Function CreateNamedPipeW Lib "kernel32" (ByVal lpName As Long, ByVal dwOpenMode As Long, ByVal dwPipeMode As Long, ByVal nMaxInstances As Long, ByVal nOutBufferSize As Long, ByVal nInBufferSize As Long, ByVal nDefaultTimeOut As Long, ByVal lpSecurityAttributes As Long) As Long
-Private Declare Function WriteFile Lib "kernel32" (ByVal hFile As Long, lpBuffer As Any, ByVal nNumberOfBytesToWrite As Long, lpNumberOfBytesWritten As Long, ByVal lpOverlapped As Long) As Long
-Private Declare Function ReadFile Lib "kernel32" (ByVal hFile As Long, lpBuffer As Any, ByVal nNumberOfBytesToRead As Long, lpNumberOfBytesRead As Long, ByVal lpOverlapped As Long) As Long
-Private Declare Function PeekNamedPipe Lib "kernel32" (ByVal hNamedPipe As Long, lpBuffer As Any, ByVal nBufferSize As Long, lpBytesRead As Long, lpTotalBytesAvail As Long, lpBytesLeftThisMessage As Long) As Long
-Private Declare Function DisconnectNamedPipe Lib "kernel32" (ByVal hPipe As Long) As Long
-Private Declare Function CloseHandle Lib "kernel32" (ByVal hObject As Long) As Long
-Private hPipe As Long
-Private iPipeFile As Long
-
-
 Private Type ws_Data
     SocketIndex As Long
-    RawData As String
+    bData() As Byte
     ContentLength As Long
     sData As String
 End Type
-'Private q_ws As New Collection
 Private a_q_ws() As ws_Data
 Private Count_a_q_ws As Long
 
@@ -93,29 +91,29 @@ Private m_oRootCa               As cTlsSocket
 Private webSocket_clients() As Long, websocket_count As Long
 Private websocket_data_available As Boolean, DataLength As Long, isMasked As Boolean, mask() As Byte, last_mask_i As Long
 
-Function Base64EncodeEX(Str() As Byte) As String
+Function Base64EncodeEX(str() As Byte) As String
     On Error GoTo over
     Dim buf() As Byte, Length As Long, mods As Long
     Const B64_CHAR_DICT = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
-    mods = (UBound(Str) + 1) Mod 3
-    Length = UBound(Str) + 1 - mods
+    mods = (UBound(str) + 1) Mod 3
+    Length = UBound(str) + 1 - mods
     ReDim buf(Length / 3 * 4 + IIf(mods <> 0, 4, 0) - 1)
     Dim i As Long
     For i = 0 To Length - 1 Step 3
-        buf(i / 3 * 4) = (Str(i) And &HFC) / &H4
-        buf(i / 3 * 4 + 1) = (Str(i) And &H3) * &H10 + (Str(i + 1) And &HF0) / &H10
-        buf(i / 3 * 4 + 2) = (Str(i + 1) And &HF) * &H4 + (Str(i + 2) And &HC0) / &H40
-        buf(i / 3 * 4 + 3) = Str(i + 2) And &H3F
+        buf(i / 3 * 4) = (str(i) And &HFC) / &H4
+        buf(i / 3 * 4 + 1) = (str(i) And &H3) * &H10 + (str(i + 1) And &HF0) / &H10
+        buf(i / 3 * 4 + 2) = (str(i + 1) And &HF) * &H4 + (str(i + 2) And &HC0) / &H40
+        buf(i / 3 * 4 + 3) = str(i + 2) And &H3F
     Next
     If mods = 1 Then
-        buf(Length / 3 * 4) = (Str(Length) And &HFC) / &H4
-        buf(Length / 3 * 4 + 1) = (Str(Length) And &H3) * &H10
+        buf(Length / 3 * 4) = (str(Length) And &HFC) / &H4
+        buf(Length / 3 * 4 + 1) = (str(Length) And &H3) * &H10
         buf(Length / 3 * 4 + 2) = 64
         buf(Length / 3 * 4 + 3) = 64
     ElseIf mods = 2 Then
-        buf(Length / 3 * 4) = (Str(Length) And &HFC) / &H4
-        buf(Length / 3 * 4 + 1) = (Str(Length) And &H3) * &H10 + (Str(Length + 1) And &HF0) / &H10
-        buf(Length / 3 * 4 + 2) = (Str(Length + 1) And &HF) * &H4
+        buf(Length / 3 * 4) = (str(Length) And &HFC) / &H4
+        buf(Length / 3 * 4 + 1) = (str(Length) And &H3) * &H10 + (str(Length + 1) And &HF0) / &H10
+        buf(Length / 3 * 4 + 2) = (str(Length + 1) And &HF) * &H4
         buf(Length / 3 * 4 + 3) = 64
     End If
     For i = 0 To UBound(buf)
@@ -136,6 +134,7 @@ End Function
 Function hybi10Encode(payload() As Byte, Optional ByVal stype As String = "text", _
     Optional ByVal masked As Boolean = True) As Byte()
 Dim frame() As Byte, frameLength As Long, payloadLength As Long, i As Long
+Dim l(7) As Byte
         payloadLength = UBound(payload) + 1
         frameLength = 0
     ReDim frame(0)
@@ -169,19 +168,23 @@ Dim frame() As Byte, frameLength As Long, payloadLength As Long, i As Long
         frameLength = frameLength + 1
         ReDim Preserve frame(frameLength)
         frame(frameLength) = IIf(masked, 255, 127)
-        Dim sBin As String, sPart As String
-            sBin = DecimalToBinary(payloadLength)
-        Dim remainder As Long
-            remainder = payloadLength Mod 256
             frameLength = frameLength + 8
             ReDim Preserve frame(frameLength)
-                sPart = sBin
+'        Dim sBin As String, sPart As String
+'            sBin = DecimalToBinary(payloadLength)
+'        Dim remainder As Long
+'            remainder = payloadLength Mod 256
+'                sPart = sBin
+'        For i = 7 To 0 Step -1
+'            frame(i + 2) = BinaryToDecimal(Right(sPart, 8))
+'            sPart = Left(sPart, Len(sPart) - 8)
+'            If sPart = "" Then
+'                Exit For
+'            End If
+'        Next
+        CopyMemory l(0), payloadLength, 4
         For i = 7 To 0 Step -1
-            frame(i + 2) = BinaryToDecimal(Right(sPart, 8))
-            sPart = Left(sPart, Len(sPart) - 8)
-            If sPart = "" Then
-                Exit For
-            End If
+            frame(i + 2) = l(7 - i)
         Next
     ElseIf payloadLength > 125 Then
 '        payloadLengthBin = str_split(sprintf('%016b', payloadLength), 8);
@@ -191,14 +194,20 @@ Dim frame() As Byte, frameLength As Long, payloadLength As Long, i As Long
         frameLength = frameLength + 1
         ReDim Preserve frame(frameLength)
         frame(frameLength) = IIf(masked, 254, 126)
-            sBin = DecimalToBinary(payloadLength, 2, IIf(payloadLength < 256, 16, 8))
-            
-        frameLength = frameLength + 1
-        ReDim Preserve frame(frameLength)
-        frame(frameLength) = BinaryToDecimal(Mid$(sBin, 1, 8)) ' payloadLength And Not 255
-        frameLength = frameLength + 1
-        ReDim Preserve frame(frameLength)
-        frame(frameLength) = BinaryToDecimal(Mid$(sBin, 9, 8))  'payloadLength And 255
+'            sBin = DecimalToBinary(payloadLength, 2, IIf(payloadLength < 256, 16, 8))
+'
+'        frameLength = frameLength + 1
+'        ReDim Preserve frame(frameLength)
+'        frame(frameLength) = BinaryToDecimal(Mid$(sBin, 1, 8)) ' payloadLength And Not 255
+'        frameLength = frameLength + 1
+'        ReDim Preserve frame(frameLength)
+'        frame(frameLength) = BinaryToDecimal(Mid$(sBin, 9, 8))  'payloadLength And 255
+        frameLength = frameLength + 2
+            ReDim Preserve frame(frameLength)
+        CopyMemory l(0), payloadLength, 2
+        For i = 1 To 0 Step -1
+            frame(i + 2) = l(1 - i)
+        Next
     Else
         frameLength = frameLength + 1
         ReDim Preserve frame(frameLength)
@@ -238,7 +247,7 @@ Dim eMask(3) As Byte
 End Function
 
 Public Function BinaryToDecimal(ByVal sBin As String, Optional ByVal BaseB As Currency = 2) As Currency
-Dim A As Currency, C As Currency, D As Currency, E As Currency, F As Currency
+Dim A As Currency, c As Currency, D As Currency, E As Currency, F As Currency
     If sBin = "" Then
         Exit Function
     End If
@@ -248,8 +257,8 @@ Do
     If F > 49 Then 'overflow
         Exit Do
     End If
-    C = BaseB ^ F 'conversion
-    D = A * C 'conversion
+    c = BaseB ^ F 'conversion
+    D = A * c 'conversion
     E = E + D 'conversion
     F = F + 1 'counter
 Loop Until sBin = ""
@@ -279,21 +288,21 @@ Loop Until D = 0
 End Function
 
 
-Function hybi10Decode(data() As Byte, cw As ctxWinsock) As String
+Function hybi10Decode(Data() As Byte, cw As ctxWinsock) As String
 Dim firstByteBinary As Byte, secondByteBinary As Byte, opcode As Long, payloadLength As Long
 Dim payloadOffset As Long, i As Long, b() As Byte, sData As String, j As Long
 Dim ubData As Long, dataLengthInt As Integer, dataLengthCur As Currency, sBin As String
 '    unmaskedPayload = '';
 '        decodedData = [];
 '        // estimate frame type:
-            ubData = UBound(data)
-        firstByteBinary = data(0)
-        secondByteBinary = data(1)
+            ubData = UBound(Data)
+        firstByteBinary = Data(0)
+        secondByteBinary = Data(1)
         
         opcode = firstByteBinary And Not 128
 '        isMasked = secondByteBinary[0] === '1';
         isMasked = secondByteBinary And 128 > 0
-        payloadLength = data(1) And 127
+        payloadLength = Data(1) And 127
 
 '        // close connection if unmasked frame is received:
 '        if (isMasked === false) {
@@ -316,13 +325,13 @@ Dim ubData As Long, dataLengthInt As Integer, dataLengthCur As Currency, sBin As
 '            mask = substr(data, 4, 4);
 '            payloadOffset = 8;
 '            dataLength = bindec(sprintf('%08b', ord(data[2])) . sprintf('%08b', ord(data[3]))) + payloadOffset;
-            CopyMemory mask(0), data(4), Len(data(2)) * 4
+            CopyMemory mask(0), Data(4), Len(Data(2)) * 4
             payloadOffset = 8
-            DataLength = (data(2) * 255) + (data(3))
+            DataLength = (Data(2) * 255) + (Data(3))
             DataLength = DataLength + payloadOffset
          ElseIf payloadLength = 127 Then
 '            mask = substr(data, 10, 4);
-            CopyMemory mask(0), data(10), Len(data(2)) * 4
+            CopyMemory mask(0), Data(10), Len(Data(2)) * 4
             payloadOffset = 14
 '            CopyMemory ByVal VarPtr(dataLengthCur), Data(2), 8
                 dataLengthCur = 0
@@ -338,7 +347,7 @@ Dim ubData As Long, dataLengthInt As Integer, dataLengthCur As Currency, sBin As
 '                        dataLengthCur = (dataLengthCur + 1) * 255
 '                    End If
 '                    dataLengthCur = dataLengthCur + Data(i + 2)
-                sBin = sBin & DecimalToBinary(data(i + 2))
+                sBin = sBin & DecimalToBinary(Data(i + 2))
             Next
 '            dataLength = bindec(tmp) + payloadOffset;
                  
@@ -348,7 +357,7 @@ Dim ubData As Long, dataLengthInt As Integer, dataLengthCur As Currency, sBin As
 '            unset(tmp);
         Else
 '            mask = substr(data, 2, 4);
-            CopyMemory mask(0), data(2), Len(data(2)) * 4
+            CopyMemory mask(0), Data(2), Len(Data(2)) * 4
             payloadOffset = 6
             DataLength = payloadLength + payloadOffset
             
@@ -376,20 +385,20 @@ Dim ubData As Long, dataLengthInt As Integer, dataLengthCur As Currency, sBin As
 '            Next
 '                dataLength = dataLength - payloadOffset
 '                websocket_data_available = dataLength > ubData
-            sData = decodeMasked(data, payloadOffset)
+            sData = decodeMasked(Data, payloadOffset)
              
         Else
             payloadOffset = payloadOffset - 4
             sData = Space(DataLength)
-            CopyMemory ByVal VarPtr(sData), data(payloadOffset), DataLength
+            CopyMemory ByVal VarPtr(sData), Data(payloadOffset), DataLength
         End If
 '
 '        return decodedData;
     hybi10Decode = sData
 End Function
-Function decodeMasked(data() As Byte, ByVal offset As Long) As String
+Function decodeMasked(Data() As Byte, ByVal offset As Long) As String
 Dim sData As String, i As Long, j As Long, ubData As Long
-        ubData = UBound(data)
+        ubData = UBound(Data)
     If isMasked = True Then
         sData = ""
         For i = offset To ubData
@@ -400,7 +409,7 @@ Dim sData As String, i As Long, j As Long, ubData As Long
                     last_mask_i = i
             End If
             j = j Mod 4
-            sData = sData & Chr(data(i) Xor mask(j) And 255)
+            sData = sData & Chr(Data(i) Xor mask(j) And 255)
         Next
             DataLength = DataLength - offset
             websocket_data_available = DataLength > ubData
@@ -458,13 +467,16 @@ Private Sub cmdCloseWebSockets_Click()
     CloseWebSockets
 End Sub
 
-Private Sub cmdSendTextMessage_Click()
+Private Sub cmdSendLengthTextMessage_Click()
 '    SendTextMessageTo "Test"
     SendTextMessageTo "<BEGIN>" & String(65535, "Test") & "<END>"
 End Sub
 
- 
- 
+  
+
+Private Sub cmdSendTextMessage_Click()
+    SendTextMessageTo "<BEGIN>" & String(125, "Test") & "<END>"
+End Sub
 
 Private Sub Command2_Click()
     Text1 = ""
@@ -477,17 +489,17 @@ End Sub
 
 Private Sub Command4_Click()
     Text1 = ""
-Dim Str As String, F As Integer
+Dim str As String, F As Integer
     F = FreeFile
-            Str = ""
+            str = ""
         Open App.Path & "\rootCA.crt" For Input As F
-            Str = Input(LOF(F), F)
+            str = Input(LOF(F), F)
         Close F
         Open App.Path & "\rootCA.key" For Input As F
-            Str = Str & vbLf & Input(LOF(F), F)
+            str = str & vbLf & Input(LOF(F), F)
         Close F
         Open App.Path & "\rootCA.pem" For Output As F
-            Print #F, Str
+            Print #F, str
         Close F
     
     ctxServer(0).Close_
@@ -495,15 +507,15 @@ Dim Str As String, F As Integer
    ctxServer(0).pvSocket.PkiPemImportRootCaCertStore App.Path & "\rootCA.pem"
  
             
-            Str = ""
+            str = ""
         Open App.Path & "\server.crt" For Input As F
-            Str = Input(LOF(F), F)
+            str = Input(LOF(F), F)
         Close F
         Open App.Path & "\server.key" For Input As F
-            Str = Str & vbLf & Input(LOF(F), F)
+            str = str & vbLf & Input(LOF(F), F)
         Close F
         Open App.Path & "\server.pem" For Output As F
-            Print #F, Str
+            Print #F, str
         Close F
     
     ctxServer(0).Protocol = sckTLSProtocol
@@ -530,13 +542,17 @@ Private Sub ctxServer_DataArrival(Index As Integer, ByVal bytesTotal As Long)
     Dim sRequest            As String
     Dim vSplit              As Variant
     Dim sBody               As String
-    
+    Dim bRequest() As Byte
 '    Debug.Print "ctxServer_DataArrival, bytesTotal=" & bytesTotal, Timer
+        bRequest = vbNullString
 If bytesTotal > -1 Then
-    ctxServer(Index).GetData sRequest
+'    ctxServer(Index).GetData sRequest
+    ctxServer(Index).GetData bRequest, vbByte + vbArray
 End If
     Dim secKey As String, i As Long, b() As Byte, AcceptKey As String, Origin As String, Host As String
-    If sRequest Like "GET*HTTP/1.?*" Then
+'    If sRequest Like "GET*HTTP/1.?*" Then
+    If UBound(bRequest) > 0 And LikeB(bRequest, StrConv("GET*HTTP/1.?*", vbFromUnicode), 0, 100) Then
+        sRequest = ctxServer(Index).pvSocket.FromTextArray(bRequest, ucsScpAcp)
         vSplit = Split(sRequest, vbCrLf)
         If InStr(vSplit(0), "/SubscribeToChatMsg") > 0 Then
             For i = 0 To UBound(vSplit)
@@ -566,6 +582,7 @@ End If
                     ReDim Preserve webSocket_clients(websocket_count)
                     webSocket_clients(websocket_count) = Index
                     websocket_count = websocket_count + 1
+            cmdSendLengthTextMessage.Enabled = True
             cmdSendTextMessage.Enabled = True
         Else
 '            Debug.Print vSplit(0)
@@ -586,45 +603,45 @@ End If
                 sBody
         End If
     Else 'Handle websocket packets
-        Dim C As Long, wsd As ws_Data, wi As Long
+        Dim c As Long, wsd As ws_Data, wi As Long
             wi = -1
-'        For C = 1 To q_ws.Count
-'                wsd.RemotePort = 0
-'                wsd.ContentLength = 0
-'                wsd.RawData = ""
-'                wsd.sData = ""
-'            DeserializeFromBytes q_ws.Item(C), wsd
-''            If wsd.RemotePort = ctxServer(Index).RemotePort Then 'Causes Stack Overflow
-'            If wsd.SocketIndex = Index Then
-'                wi = C
-'                Exit For
-'            End If
-'        Next
             wi = Find_ws_Data_By_Index(Index)
+            wsd.bData = vbNullString
         If wi <> -1 Then
-'           q_ws.Remove wi
             wsd = a_q_ws(wi)
             Remove_ws_Data wi
         End If
-'            wsd.RemotePort = ctxServer(Index).RemotePort'Causes Stack Overflow
             wsd.SocketIndex = Index
             
-        Dim data() As Byte
         Dim firstByteBinary As Byte, secondByteBinary As Byte, opcode As Long
-        Dim payloadOffset As Long, payloadLength As Long
-        Dim ubData As Long, dataLengthInt As Integer, dataLengthCur As Currency, sBin As String
+        Dim payloadOffset As Long, payloadLength As Long, l(3) As Byte
+        Dim ubData As Long, dataLengthInt As Integer
         Dim DataLength As Long, isMasked As Boolean, mask() As Byte, hasContinuation As Boolean
-        
-        Dim bSuccess As Boolean, NextFrame As String
-            If wsd.RawData <> "" Then
-                sRequest = wsd.RawData & sRequest
-                wsd.RawData = ""
+        Dim j As Long, k As Long
+        Dim bSuccess As Boolean, sData As String
+'            If wsd.RawData <> "" Then
+            k = UBound(wsd.bData)
+            If k > -1 Then
+'                sRequest = wsd.RawData & sRequest
+'                wsd.RawData = ""
+                j = UBound(bRequest)
+                If j > -1 Then
+                    mask = bRequest
+                    bRequest = wsd.bData
+                    ReDim Preserve bRequest((k + j + 1))
+                    CopyMemory bRequest(k + 1), mask(0), j + 1
+                Else
+'                    ReDim bRequest(k)
+'                    CopyMemory bRequest(0), wsd.bData(0), k + 1
+                    bRequest = wsd.bData
+                End If
+                wsd.bData = vbNullString
             End If
-            data = StrConv(sRequest, vbFromUnicode)
-                ubData = UBound(data)
+'            Data = StrConv(sRequest, vbFromUnicode)
+                ubData = UBound(bRequest)
                     hasContinuation = False
             If ubData > -1 Then
-                firstByteBinary = data(0)
+                firstByteBinary = bRequest(0)
                     If firstByteBinary = 1 Then
                         firstByteBinary = 129
                         'Has Continuation frames
@@ -633,17 +650,14 @@ End If
                         'Is Continuation
                         hasContinuation = True
                     End If
-                secondByteBinary = data(1)
+                secondByteBinary = bRequest(1)
                 opcode = firstByteBinary And Not 128
                 isMasked = secondByteBinary And 128 > 0
-                payloadLength = data(1) And 127
+                payloadLength = bRequest(1) And 127
                  
             End If
             Select Case opcode
                 Case 0 'Continuation
-                    If ubData > -1 Then
-'                        wsd.sData = wsd.sData & deCodeFrame(sRequest)
-                    End If
                 Case 1 ' text frame:
                 Case 2 'binary
                 Case 8 'connection close frame
@@ -655,14 +669,21 @@ End If
                         If bytesTotal < -4 Then 'Escape possible 'Out of Stack space' Error
                             'Send close frame
                             ctxServer(Index).SendData hybi10Encode(StrConv("", vbFromUnicode), "close", False)   'A server must not mask any frames that it sends to the client.
-                            
                             Exit Sub
                         End If
                     If ubData > -1 Then
-                        wsd.RawData = wsd.RawData & sRequest
-'                        q_ws.Add SerializeToBytes(wsd), "W" & Index
+'                        wsd.RawData = wsd.RawData & sRequest
+                            k = UBound(wsd.bData)
+                            j = UBound(bRequest)
+                            If k > -1 Then
+                                ReDim Preserve wsd.bData((j + k + 1))
+                                CopyMemory wsd.bData(k + 1), bRequest(0), j + 1
+                            Else
+'                                ReDim Preserve wsd.bData(k)
+'                                CopyMemory wsd.bData(0), bRequest(0), j + 1
+                                wsd.bData = bRequest
+                            End If
                         Add_ws_Data wsd
-                            
                         ctxServer_DataArrival Index, IIf(bytesTotal > 0, -1, bytesTotal - 1)
                         Exit Sub
                     End If
@@ -670,37 +691,59 @@ End If
                 DataLength = 0
             If payloadLength = 126 Then
                 payloadOffset = 8
-                dataLengthCur = 0
-                    sBin = ""
-                For i = 0 To 1
-                    sBin = sBin & DecimalToBinary(data(i + 2))
-                Next
-                dataLengthCur = BinaryToDecimal(sBin)
-                DataLength = dataLengthCur + payloadOffset
+                    If isMasked = False Then
+                        payloadOffset = 4
+                    End If
+'                dataLengthCur = 0
+'                    sBin = ""
+'                For i = 0 To 1
+'                    sBin = sBin & DecimalToBinary(Data(i + 2))
+'                Next
+'                dataLengthCur = BinaryToDecimal(sBin)
+'                DataLength = dataLengthCur + payloadOffset
+                    l(0) = bRequest(3)
+                    l(1) = bRequest(2)
+                     CopyMemory DataLength, l(0), 4
+                DataLength = DataLength + payloadOffset
              ElseIf payloadLength = 127 Then
                 payloadOffset = 14
-                    dataLengthCur = 0
-                    sBin = ""
-                For i = 0 To 7
-                    sBin = sBin & DecimalToBinary(data(i + 2))
-                Next
-                dataLengthCur = BinaryToDecimal(sBin)
-                DataLength = dataLengthCur + payloadOffset
+                    If isMasked = False Then
+                        payloadOffset = 10
+                    End If
+'                    dataLengthCur = 0
+'                    sBin = ""
+'                For i = 0 To 7
+'                    sBin = sBin & DecimalToBinary(Data(i + 2))
+'                Next
+'                dataLengthCur = BinaryToDecimal(sBin)
+'                DataLength = dataLengthCur + payloadOffset
+                l(0) = bRequest(9)
+                l(1) = bRequest(8)
+                l(2) = bRequest(7)
+                l(3) = bRequest(6)
+                CopyMemory DataLength, l(0), 4
+                DataLength = DataLength + payloadOffset
             ElseIf payloadLength > 0 Then
                 payloadOffset = 6
+                If isMasked = False Then
+                    payloadOffset = 2
+                End If
                 DataLength = payloadLength + payloadOffset
             End If
-            If Len(sRequest) < DataLength Then
-                wsd.RawData = sRequest
-'                q_ws.Add SerializeToBytes(wsd), "W" & Index
+'            If Len(sRequest) < DataLength Then
+            If (ubData + 1) < DataLength Then
+'                wsd.RawData = sRequest
+                wsd.bData = bRequest
                 Add_ws_Data wsd
                 Exit Sub
             Else
-                sBin = deCodeFrame(data, bSuccess, NextFrame)
+'                sBin = deCodeFrame(Data, bSuccess, NextFrame)
+                sData = ToUnicodeString(deCodeFrame(bRequest, bSuccess))
                 If bSuccess = False Then
-                    wsd.RawData = sRequest
+'                    wsd.RawData = sRequest
+                    wsd.bData = bRequest
                 Else
-                    wsd.sData = wsd.sData & sBin
+                    wsd.sData = wsd.sData & sData
                     wsd.ContentLength = wsd.ContentLength + (DataLength - payloadOffset)
                         If opcode = 0 And hasContinuation = True Then
                             hasContinuation = False
@@ -714,33 +757,148 @@ End If
         If hasContinuation = False And wsd.ContentLength = Len(wsd.sData) Then 'And Right$(wsd.sData, 1) = "}" Then
             web_socket_DataArrival wsd.sData, ctxServer(Index)
         Else
-'            q_ws.Add SerializeToBytes(wsd), "W" & Index
             Add_ws_Data wsd
             Exit Sub
         End If
     End If
 '    Debug.Print "ctxServer_DataArrival, done", Timer
 End Sub
+'Function deCodeFrame(ByVal RawData As String, bSuccess As Boolean) As String
+Function deCodeFrame(Data() As Byte, bSuccess As Boolean) As Byte()
+Dim firstByteBinary As Byte, secondByteBinary As Byte, opcode As Long, payloadLength As Long
+Dim payloadOffset As Long, sData As String, j As Long, l(3) As Byte
+Dim ubData As Long, DataLength As Long, isMasked As Boolean, mask() As Byte
+Dim offset As Long, i As Long, DataAvailable As Long
+Dim mbuff() As Byte
+    bSuccess = False
+'                sData = ""
+                mbuff = vbNullString
+                ubData = UBound(Data)
+                deCodeFrame = mbuff
+            If ubData = -1 Then
+                Exit Function
+            End If
+            firstByteBinary = Data(0)
+            secondByteBinary = Data(1)
+            
+            opcode = firstByteBinary And Not 128
+            isMasked = secondByteBinary And 128 > 0
+            payloadLength = Data(1) And 127
+    
+            Select Case opcode
+                Case 0 ' Continuation
+                Case 1 ' text frame:
+                Case 2 'binary
+                Case 8 'connection close frame
+                Case 9 'ping frame
+                Case 10 'pong frame
+                Case Else
+                    Exit Function
+            End Select
+                ReDim mask(3)
+            If payloadLength = 126 Then
+                CopyMemory mask(0), Data(4), 4
+                payloadOffset = 8
+                    If isMasked = False Then
+                        payloadOffset = 4
+                    End If
+'                dataLengthCur = 0
+'                    sBin = ""
+'                For i = 0 To 1
+'                    sBin = sBin & DecimalToBinary(Data(i + 2))
+'                Next
+'                dataLengthCur = BinaryToDecimal(sBin)
+'                DataLength = dataLengthCur + payloadOffset
+                l(0) = Data(3)
+                l(1) = Data(2)
+                CopyMemory DataLength, l(0), 4
+                DataLength = DataLength + payloadOffset
+             ElseIf payloadLength = 127 Then
+                CopyMemory mask(0), Data(10), 4
+                payloadOffset = 14
+                    If isMasked = False Then
+                        payloadOffset = 10
+                    End If
+'                    dataLengthCur = 0
+'                    sBin = ""
+'                For i = 0 To 7
+'                    sBin = sBin & DecimalToBinary(Data(i + 2))
+'                Next
+'                dataLengthCur = BinaryToDecimal(sBin)
+'                DataLength = dataLengthCur + payloadOffset
+                l(0) = Data(9)
+                l(1) = Data(8)
+                l(2) = Data(7)
+                l(3) = Data(6)
+                CopyMemory DataLength, l(0), 4
+                DataLength = DataLength + payloadOffset
+            Else
+                CopyMemory mask(0), Data(2), 4
+                payloadOffset = 6
+                    If isMasked = False Then
+                        payloadOffset = 2
+                    End If
+                DataLength = payloadLength + payloadOffset
+            End If
+
+        If DataLength > 0 And opcode < 3 Then
+            If isMasked = True Then
+                offset = payloadOffset
+                DataAvailable = IIf((DataLength - 1) > ubData, ubData, DataLength - 1)
+                If ((DataAvailable + 1)) <> DataLength Then
+                    bSuccess = False
+                    Exit Function
+                End If
+                ReDim mbuff(DataAvailable - offset)
+                For i = offset To DataAvailable 'ubData
+                        j = i - offset
+                    j = j Mod 4
+'                    sData = sData & Chr(Data(i) Xor mask(j) And 255)
+                    mbuff(i - offset) = Data(i) Xor mask(j) And 255
+                Next
+'                DataAvailable = DataAvailable + offset
+'                sData = ToUnicodeString(dataA)  '------------work ok'
+            Else
+                payloadOffset = payloadOffset - 4
+                DataAvailable = IIf((DataLength - 1) > ubData, ubData, DataLength - 1)
+                If ((DataAvailable + 1) - payloadOffset) <> DataLength Then
+                    bSuccess = False
+                    Exit Function
+                End If
+'                sData = Space(DataAvailable + 1)
+'                CopyMemory ByVal VarPtr(sData), Data(payloadOffset), DataAvailable + 1 'DataLength
+'                DataAvailable = DataAvailable + 4
+                ReDim mbuff(DataAvailable)
+                CopyMemory mbuff(0), Data(payloadOffset), DataAvailable + 1 'DataLength
+'                sData = ToUnicodeString(mbuff)
+            End If
+        Else
+            Exit Function
+        End If
+'    deCodeFrame = sData
+    deCodeFrame = mbuff
+        bSuccess = True
+End Function
 Private Function Find_ws_Data_By_Index(ByVal Index As Long) As Long
-Dim i As Long, C As Long
+Dim i As Long, c As Long
     i = -1
-For C = Count_a_q_ws - 1 To 0 Step -1
-    If a_q_ws(C).SocketIndex = Index Then
-        i = C
+For c = Count_a_q_ws - 1 To 0 Step -1
+    If a_q_ws(c).SocketIndex = Index Then
+        i = c
         Exit For
     End If
 Next
     Find_ws_Data_By_Index = i
 End Function
 Private Function Remove_ws_Data(ByVal aIndex As Long) As Long
-Dim C As Long, tmp() As ws_Data
+Dim c As Long, tmp() As ws_Data
     If Count_a_q_ws = 0 Then Exit Function
 ReDim tmp(Count_a_q_ws - 1)
-For C = 0 To aIndex - 1
-    tmp(C) = a_q_ws(C)
+For c = 0 To aIndex - 1
+    tmp(c) = a_q_ws(c)
 Next
-For C = aIndex + 1 To Count_a_q_ws - 1
-    tmp(C - 1) = a_q_ws(C)
+For c = aIndex + 1 To Count_a_q_ws - 1
+    tmp(c - 1) = a_q_ws(c)
 Next
     a_q_ws = tmp
         Erase tmp
@@ -765,138 +923,18 @@ Sub web_socket_DataArrival(ByVal sData As String, ByVal cx As ctxWinsock)
       cx.SendData hybi10Encode(b, "text", False)    'A server must not mask any frames that it sends to the client.
  
 End Sub
-'Function deCodeFrame(ByVal RawData As String, bSuccess As Boolean) As String
-Function deCodeFrame(data() As Byte, bSuccess As Boolean, NextFrame As String) As String
-'Dim data() As Byte
-Dim firstByteBinary As Byte, secondByteBinary As Byte, opcode As Long, payloadLength As Long
-Dim payloadOffset As Long, sData As String, j As Long
-Dim ubData As Long, dataLengthInt As Integer, dataLengthCur As Currency, sBin As String
-Dim DataLength As Long, isMasked As Boolean, mask() As Byte
-Dim offset As Long, i As Long, DataAvailable As Long
-    bSuccess = False
-                sData = ""
-                NextFrame = ""
-'            data = StrConv(RawData, vbFromUnicode)
-                ubData = UBound(data)
-            If ubData = -1 Then Exit Function
-            firstByteBinary = data(0)
-            secondByteBinary = data(1)
-            
-            opcode = firstByteBinary And Not 128
-            isMasked = secondByteBinary And 128 > 0
-            payloadLength = data(1) And 127
-    
-            Select Case opcode
-                Case 0 ' Continuation
-                Case 1 ' text frame:
-                Case 2 'binary
-                Case 8 'connection close frame
-                Case 9 'ping frame
-                Case 10 'pong frame
-                Case Else
-                    Exit Function
-            End Select
-                ReDim mask(3)
-            If payloadLength = 126 Then
-                CopyMemory mask(0), data(4), Len(data(2)) * 4
-                payloadOffset = 8
-                dataLengthCur = 0
-                    sBin = ""
-                For i = 0 To 1
-                    sBin = sBin & DecimalToBinary(data(i + 2))
-                Next
-                dataLengthCur = BinaryToDecimal(sBin)
-                DataLength = dataLengthCur + payloadOffset
-             ElseIf payloadLength = 127 Then
-                CopyMemory mask(0), data(10), Len(data(2)) * 4
-                payloadOffset = 14
-                    dataLengthCur = 0
-                    sBin = ""
-                For i = 0 To 7
-                    sBin = sBin & DecimalToBinary(data(i + 2))
-                Next
-                dataLengthCur = BinaryToDecimal(sBin)
-                DataLength = dataLengthCur + payloadOffset
-            Else
-                CopyMemory mask(0), data(2), Len(data(2)) * 4
-                payloadOffset = 6
-                DataLength = payloadLength + payloadOffset
-            End If
 
-        If DataLength > 0 And opcode < 3 Then
-            If isMasked = True Then
-                offset = payloadOffset
-                DataAvailable = IIf((DataLength - 1) > ubData, ubData, DataLength - 1)
-'                DataLength = DataLength - offset
-                If ((DataAvailable + 1)) <> DataLength Then
-                    bSuccess = False
-                    Exit Function
-                End If
-                For i = offset To DataAvailable 'ubData
-                        j = i - offset
-                    j = j Mod 4
-                    sData = sData & Chr(data(i) Xor mask(j) And 255)
-                Next
-                DataAvailable = DataAvailable + offset
-            Else
-                payloadOffset = payloadOffset - 4
-                DataAvailable = IIf((DataLength - 1) > ubData, ubData, DataLength - 1)
-                If ((DataAvailable + 1) - payloadOffset) <> DataLength Then
-                    bSuccess = False
-                    Exit Function
-                End If
-                sData = Space(DataAvailable + 1)
-                CopyMemory ByVal VarPtr(sData), data(payloadOffset), DataAvailable + 1 'DataLength
-                DataAvailable = DataAvailable + 4
-            End If
-'            If DataAvailable < (ubData) Then
-'                offset = DataAvailable + 1
-'                DataAvailable = (ubData) - DataAvailable
-'                NextFrame = Space(DataAvailable + 1)
-'                CopyMemory ByVal VarPtr(sData), data(payloadOffset), DataAvailable + 1
-'            End If
-        Else
-            Exit Function
-        End If
-    deCodeFrame = sData
-        bSuccess = True
-End Function
-Private Function SerializeToBytes(udt As ws_Data) As Byte()
-    Dim Bytes As Long
-    Dim b() As Byte
-    '
-    If iPipeFile = 0 Then Exit Function
-    '
-    Put iPipeFile, 1, udt
-    PeekNamedPipe hPipe, ByVal 0&, 0, ByVal 0&, Bytes, 0
-    If Bytes <= 0 Then Exit Function
-    '
-    ReDim Preserve b(0 To Bytes - 1)
-    ReadFile hPipe, b(0), Bytes, Bytes, ByVal 0&
-    SerializeToBytes = b
-End Function
-
-Private Sub DeserializeFromBytes(b() As Byte, udt As ws_Data)
-    Dim Bytes As Long
-    '
-    If iPipeFile = 0 Then Exit Sub
-    '
-    WriteFile hPipe, b(0), UBound(b) + 1, Bytes, 0
-    If Bytes <> UBound(b) + 1 Then Exit Sub
-    '
-    Get iPipeFile, 1, udt
-End Sub
 Private Sub ctxServer_CloseEvent(Index As Integer)
-Dim i As Long, C As Long, temp() As Long
+Dim i As Long, c As Long, temp() As Long
 For i = 0 To websocket_count - 1
     If webSocket_clients(i) <> Index Then
-        ReDim Preserve temp(C)
-        temp(C) = webSocket_clients(i)
-        C = C + 1
+        ReDim Preserve temp(c)
+        temp(c) = webSocket_clients(i)
+        c = c + 1
     End If
 Next
 webSocket_clients = temp
-websocket_count = C
+websocket_count = c
 
     Unload ctxServer(Index)
 End Sub
@@ -905,23 +943,7 @@ Private Sub ctxServer_Close(Index As Integer)
     ctxServer_CloseEvent Index
 End Sub
 
-
 Private Sub ctxWinsock_Error(ByVal Number As Long, Description As String, ByVal Scode As UcsErrorConstants, Source As String, HelpFile As String, ByVal HelpContext As Long, CancelDisplay As Boolean)
     Debug.Print "Error: " & Description
 End Sub
-
-Private Sub Form_Load()
-         ' Open pipe.
-    Const PipeName = "\\.\pipe\vbPipedUDTs"
-    hPipe = CreateNamedPipeW(StrPtr(PipeName), 3, 0, 255, -1, -1, 0, 0)
-    If hPipe = -1 Then hPipe = 0
-    If hPipe Then iPipeFile = FreeFile: Open PipeName For Binary As iPipeFile
-
-End Sub
-
-Private Sub Form_Unload(Cancel As Integer)
-     ' Close pipe.
-    If iPipeFile Then Close iPipeFile: iPipeFile = 0
-    If hPipe Then DisconnectNamedPipe hPipe: CloseHandle hPipe: hPipe = 0
-
-End Sub
+ 
