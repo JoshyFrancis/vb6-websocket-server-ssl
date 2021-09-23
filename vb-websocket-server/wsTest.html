@@ -70,6 +70,23 @@ function SendLengthyChatMessage(){
 	if(wsChatMsg){
 		wsChatMsg.send(JSON.stringify(oJSON));
 	}
+}
+function SendNonEnglishMessage(){
+	var Msg ='Sanskrit: ﻿काचं शक्नोम्यत्तुम् । नोपहिनस्ति माम् ॥' ;
+	Msg +='\nClassical Greek: ὕαλον ϕαγεῖν δύναμαι· τοῦτο οὔ με βλάπτει.' ;
+	Msg +='\nSpanish: Puedo comer vidrio, no me hace daño.' ;
+	Msg +='\nGeorgian: მინას ვჭამ და არა მტკივა.' ;
+	Msg +='\nKannada: ನನಗೆ ಹಾನಿ ಆಗದೆ, ನಾನು ಗಜನ್ನು ತಿನಬಹುದು' ;
+	Msg +='\nMalayalam: എനിക്ക് ഗ്ലാസ് തിന്നാം. അതെന്നെ വേദനിപ്പിക്കില്ല.' ;
+	Msg +='\nTamil: நான் கண்ணாடி சாப்பிடுவேன், அதனால் எனக்கு ஒரு கேடும் வராது.' ;
+	Msg +='\nHebrew(3): אני יכול לאכול זכוכית וזה לא מזיק לי.' ;
+	Msg +='\nChinese: 我能吞下玻璃而不伤身体。' ;
+	Msg +='\nChinese (Traditional): 我能吞下玻璃而不傷身體。' ;
+	Msg +='\nJapanese: 私はガラスを食べられます。それは私を傷つけません。' ;
+	Msg +='\nRussian: Съешь же ещё этих мягких французских булок да выпей чаю.' ;
+	if(wsChatMsg){
+		wsChatMsg.send(Msg);
+	}
 } 
 function jsonAjaxRPC(oJSON){
 var req = new XMLHttpRequest();
@@ -118,6 +135,8 @@ function jsonResponseHandler(oJSON){
 
 <input id="txtChatMsg" type="text" value="Chat-Message" />
 <button  type="button" onclick="SendLengthyChatMessage();">Send Lengthy Message</button> 
+<button  type="button" onclick="SendNonEnglishMessage();">Send NonEglish Message</button> 
+
 </div>
 
 <textarea id="logChat" cols="60" rows="10" style="vertical-align: top;"></textarea>

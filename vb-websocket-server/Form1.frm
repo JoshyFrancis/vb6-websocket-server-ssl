@@ -1,69 +1,134 @@
 VERSION 5.00
 Begin VB.Form Form1 
+   AutoRedraw      =   -1  'True
    Caption         =   "Websocket Server"
-   ClientHeight    =   2952
+   ClientHeight    =   5088
    ClientLeft      =   108
    ClientTop       =   456
-   ClientWidth     =   10116
+   ClientWidth     =   9996
+   BeginProperty Font 
+      Name            =   "Times New Roman"
+      Size            =   10.8
+      Charset         =   0
+      Weight          =   700
+      Underline       =   0   'False
+      Italic          =   0   'False
+      Strikethrough   =   0   'False
+   EndProperty
    LinkTopic       =   "Form1"
-   ScaleHeight     =   2952
-   ScaleWidth      =   10116
+   ScaleHeight     =   424
+   ScaleMode       =   3  'Pixel
+   ScaleWidth      =   833
    StartUpPosition =   3  'Windows Default
    Begin VB.CommandButton cmdSendTextMessage 
       Caption         =   "Send Text Message"
       Enabled         =   0   'False
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   7.8
+         Charset         =   0
+         Weight          =   400
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
       Height          =   492
       Left            =   3600
       TabIndex        =   5
-      Top             =   840
+      Top             =   3000
       Width           =   1812
    End
    Begin VB.CommandButton cmdCloseWebSockets 
       Caption         =   "Close Web Sockets"
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   7.8
+         Charset         =   0
+         Weight          =   400
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
       Height          =   492
       Left            =   7440
       TabIndex        =   4
-      Top             =   840
+      Top             =   3000
       Width           =   2292
    End
    Begin VB.CommandButton cmdSendLengthTextMessage 
       Caption         =   "Send Lengthy Text Message"
       Enabled         =   0   'False
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   7.8
+         Charset         =   0
+         Weight          =   400
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
       Height          =   492
       Left            =   5520
       TabIndex        =   3
-      Top             =   840
+      Top             =   3000
       Width           =   1812
    End
    Begin VB.TextBox Text1 
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   7.8
+         Charset         =   0
+         Weight          =   400
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
       Height          =   1332
       Left            =   2040
       MultiLine       =   -1  'True
       ScrollBars      =   3  'Both
       TabIndex        =   2
-      Top             =   1440
+      Top             =   3600
       Width           =   7692
    End
    Begin VB.CommandButton Command4 
       Caption         =   "Start WSS Server"
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   7.8
+         Charset         =   0
+         Weight          =   400
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
       Height          =   516
       Left            =   252
       TabIndex        =   1
-      Top             =   1680
+      Top             =   3840
       Width           =   1524
    End
    Begin VB.CommandButton Command2 
       Caption         =   "Start WS Server"
+      BeginProperty Font 
+         Name            =   "MS Sans Serif"
+         Size            =   7.8
+         Charset         =   0
+         Weight          =   400
+         Underline       =   0   'False
+         Italic          =   0   'False
+         Strikethrough   =   0   'False
+      EndProperty
       Height          =   516
       Left            =   252
       TabIndex        =   0
-      Top             =   924
+      Top             =   3084
       Width           =   1524
    End
    Begin WinsockTest.ctxWinsock ctxServer 
       Index           =   0
       Left            =   2604
-      Top             =   840
+      Top             =   3000
       _ExtentX        =   677
       _ExtentY        =   677
    End
@@ -75,11 +140,51 @@ Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
 Option Explicit
 Private Declare Sub CopyMemory Lib "kernel32.dll" Alias "RtlMoveMemory" (ByRef Destination As Any, ByRef Source As Any, ByVal Length As Long)
+Private Declare Function TextOutW Lib "gdi32" (ByVal HDc As Long, ByVal x As Long, ByVal y As Long, ByVal lpString As Long, ByVal nCount As Long) As Long
+Private Type RECT
+        Left As Long
+        Top As Long
+        Right As Long
+        Bottom As Long
+End Type
+'wFormat flags:
+Private Const DT_BOTTOM As Long = &H8&
+Private Const DT_CALCRECT As Long = &H400&
+Private Const DT_CENTER As Long = &H1&
+Private Const DT_EDITCONTROL As Long = &H2000&
+Private Const DT_END_ELLIPSIS As Long = &H8000&
+Private Const DT_EXPANDTABS As Long = &H40&
+Private Const DT_EXTERNALLEADING As Long = &H200&
+Private Const DT_HIDEPREFIX As Long = &H100000
+Private Const DT_INTERNAL As Long = &H1000&
+Private Const DT_LEFT As Long = &H0&
+Private Const DT_MODIFYSTRING As Long = &H10000
+Private Const DT_NOCLIP As Long = &H100&
+Private Const DT_NOFULLWIDTHCHARBREAK As Long = &H80000
+Private Const DT_NOPREFIX As Long = &H800&
+Private Const DT_PATH_ELLIPSIS As Long = &H4000&
+Private Const DT_PREFIXONLY As Long = &H200000
+Private Const DT_RIGHT As Long = &H2&
+Private Const DT_SINGLELINE As Long = &H20&
+Private Const DT_TABSTOP As Long = &H80&
+Private Const DT_TOP As Long = &H0&
+Private Const DT_VCENTER As Long = &H4&
+Private Const DT_WORDBREAK As Long = &H10&
+Private Const DT_WORD_ELLIPSIS As Long = &H40000
+
+Private Declare Function DrawTextW Lib "user32" ( _
+    ByVal HDc As Long, _
+    ByVal lpStr As Long, _
+    ByVal nCount As Long, _
+    ByRef lpRect As RECT, _
+    ByVal wFormat As Long) As Long
+
 
 Private Type ws_Data
     SocketIndex As Long
     bData() As Byte
     ContentLength As Long
+    pLength As Long
     sData As String
 End Type
 Private a_q_ws() As ws_Data
@@ -738,13 +843,25 @@ End If
                 Exit Sub
             Else
 '                sBin = deCodeFrame(Data, bSuccess, NextFrame)
-                sData = ToUnicodeString(deCodeFrame(bRequest, bSuccess))
-                If bSuccess = False Then
+                'sData = ToUnicodeString(deCodeFrame(bRequest, bSuccess))
+                mask = deCodeFrame(bRequest, bSuccess)
+                sData = ConvertFromUTF8(mask)
+                    Cls
+'                    TextOutW HDc, 10, 10, StrPtr(sData), IIf(Len(sData) < 1000, Len(sData), 1000)
+                    Dim rc As RECT
+                        rc.Left = 5
+                        rc.Right = ScaleWidth - 10
+                        rc.Top = 5
+                        rc.Bottom = 250
+                    DrawTextW HDc, StrPtr(sData), IIf(Len(sData) < 1000, Len(sData), 1000), rc, DT_LEFT Or DT_EDITCONTROL
+                    
+               If bSuccess = False Then
 '                    wsd.RawData = sRequest
                     wsd.bData = bRequest
                 Else
                     wsd.sData = wsd.sData & sData
                     wsd.ContentLength = wsd.ContentLength + (DataLength - payloadOffset)
+                    wsd.pLength = wsd.pLength + (UBound(mask) + 1)
                         If opcode = 0 And hasContinuation = True Then
                             hasContinuation = False
                         Else
@@ -754,7 +871,8 @@ End If
                         End If
                 End If
             End If
-        If hasContinuation = False And wsd.ContentLength = Len(wsd.sData) Then 'And Right$(wsd.sData, 1) = "}" Then
+'        If hasContinuation = False And wsd.ContentLength = len(wsd.sData) Then
+        If hasContinuation = False And wsd.ContentLength = wsd.pLength Then
             web_socket_DataArrival wsd.sData, ctxServer(Index)
         Else
             Add_ws_Data wsd

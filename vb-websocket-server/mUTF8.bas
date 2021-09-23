@@ -57,3 +57,44 @@ Public Function Encoding(ByVal UCS As String) As Byte()
     Encoding = abUTF8
     End If
 End Function
+Public Function ConvertFromUTF8(ByRef Source() As Byte) As String
+  Dim Size As Long
+  Dim Pointer As Long
+  Dim Length As Long
+  Dim Buffer As String
+  
+  Size = UBound(Source) - LBound(Source) + 1
+  Pointer = VarPtr(Source(LBound(Source)))
+    
+  If pUTF8header(Source) Then
+    ' Ignore BOM header
+    ' http://en.wikipedia.org/wiki/Byte_order_mark
+    Size = Size - 3
+    Pointer = Pointer + 3
+  End If
+    
+  Length = MultiByteToWideChar(CP_UTF8, 0, Pointer, Size, 0, 0)
+  Buffer = Space$(Length)
+  MultiByteToWideChar CP_UTF8, 0, Pointer, Size, StrPtr(Buffer), Length
+  ConvertFromUTF8 = Buffer
+End Function
+
+'---------------------------------------------------------------------------------------
+' Procedure : pUTF8header
+' DateTime  : 14-6-2013
+' Reference : http://en.wikipedia.org/wiki/Byte_order_mark
+'---------------------------------------------------------------------------------------
+Private Function pUTF8header(Source() As Byte) As Boolean
+
+  If UBound(Source) >= 2 Then
+    If Source(0) = &HEF Then
+      If Source(1) = &HBB Then
+        If Source(2) = &HBF Then
+          pUTF8header = True
+          Exit Function
+        End If
+      End If
+    End If
+  End If
+
+End Function
