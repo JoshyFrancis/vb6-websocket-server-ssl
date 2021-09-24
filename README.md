@@ -5,8 +5,9 @@ Now wss://localhost:8088 is possible.
 Now Lengthy(char length more than 65536) messages possible.
 
 Thanks goes to :
-Vladimir Vissoultchev(wqweto)
-Olaf Schmidt
+  . Vladimir Vissoultchev(wqweto)
+  . Olaf Schmidt
+  . xxdoc123
 and many others.
 https://github.com/wqweto/VbAsyncSocket
 
@@ -30,4 +31,4 @@ Notes:
 
 I have combined and ported codes from here and there, and given the references, detailed code explanations can be found there.
 
-<img src="screen-shot.png"/>
+<img src="screen-shot.png?id=1"/>
