@@ -140,7 +140,7 @@ Attribute VB_PredeclaredId = True
 Attribute VB_Exposed = False
 Option Explicit
 Private Declare Sub CopyMemory Lib "kernel32.dll" Alias "RtlMoveMemory" (ByRef Destination As Any, ByRef Source As Any, ByVal Length As Long)
-Private Declare Function TextOutW Lib "gdi32" (ByVal HDc As Long, ByVal x As Long, ByVal y As Long, ByVal lpString As Long, ByVal nCount As Long) As Long
+Private Declare Function TextOutW Lib "gdi32" (ByVal HDc As Long, ByVal X As Long, ByVal Y As Long, ByVal lpString As Long, ByVal nCount As Long) As Long
 Private Type RECT
         Left As Long
         Top As Long
@@ -698,14 +698,19 @@ End If
                 "</body></html>" & vbCrLf
                 Dim F As Integer
                     F = FreeFile
-                Open App.Path & "\wsTest.html" For Input As F
-                    sBody = Input(LOF(F), F)
+                Open App.Path & "\wsTest.html" For Binary As F
+'                    sBody = Input(LOF(F), F)
+                    bRequest = InputB(LOF(F), F)
                 Close F
-                
-            ctxServer(Index).SendData "HTTP/1.1 200 OK" & vbCrLf & _
+            Dim bBody() As Byte
+            bBody = StrConv("HTTP/1.1 200 OK" & vbCrLf & _
                 "Content-Type: text/html" & vbCrLf & _
-                "Content-Length: " & Len(sBody) & vbCrLf & vbCrLf & _
-                sBody
+                "Content-Length: " & (UBound(bRequest) + 1) & vbCrLf & vbCrLf, vbFromUnicode)
+            Dim bL As Long
+                bL = UBound(bBody)
+            ReDim Preserve bBody(bL + UBound(bRequest) + 1)
+            CopyMemory bBody(bL + 1), bRequest(0), UBound(bRequest) + 1
+            ctxServer(Index).SendData bBody, ucsScpAcp
         End If
     Else 'Handle websocket packets
         Dim c As Long, wsd As ws_Data, wi As Long
