@@ -31,4 +31,4 @@ Notes:
 
 I have combined and ported codes from here and there, and given the references, detailed code explanations can be found there.
 
-<img src="screen-shot.png?id=1"/>
+<img src="p.png"/>
